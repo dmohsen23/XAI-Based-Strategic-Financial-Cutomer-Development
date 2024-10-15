@@ -1,0 +1,30 @@
+function z = MyCost1(x,VarMin,VarMax)
+        
+    % Cost Function's Violations
+    Violation0 = max(constraint0,0);
+    Violation1 = max(constraint1,0);
+    Violation2 = max(constraint2,0);
+    Violation3 = max(constraint3,0);
+    Violation4 = max(constraint4,0);
+    Violation5 = max(constraint5,0);
+    Violation6 = max(constraint6,0);
+    Violation7 = max(constraint7,0);
+    
+    alpha = 0.1;
+    
+    % Features' Cost Function
+    Violationz1 = max(0,(x(1,1)/VarMax(1,1) - VarMin(1,1))-1);
+    z1 = abs(DMUo(7) + x(1,1) - DMUp(7)) + 5*Violationz1;
+    
+    Violationz2 = max(0,(x(1,2)/VarMax(1,2) - VarMin(1,2))-1);
+    z2 = abs(DMUo(8) + x(1,2) - DMUp(8)) + 5*Violationz2;
+    
+    Violationz3 = max(0,(x(2,1)/VarMax(2,1) - VarMin(2,1))-1);
+    z3 = abs(DMUo(8) + x(2,1) - DMUp(8)) + 5*Violationz3;
+    
+    Violationz4 = max(0,(x(2,2)/VarMax(2,2) - VarMin(2,2))-1);
+    z4 = abs(DMUo(8) + x(1,2) - DMUp(8)) + 5*Violationz4;
+    
+    z=[z1;z2;z3;z4];
+    
+end

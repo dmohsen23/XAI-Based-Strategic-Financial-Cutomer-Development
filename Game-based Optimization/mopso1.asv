@@ -1,0 +1,200 @@
+tic
+clc;
+clear;
+close all;
+
+%% Problem Definition
+
+file = xlsread('Data Insurance.xlsx');
+
+% Importing the Observed and Prospective Customers
+z = 2;
+o = 3906;                             % Index of Observed Customer
+p = 5720;                             % Index of Prospective Customer
+
+Cuo = file(z+o, 2:end-1);             % Observed Customer
+Cup = file(z+p, 2:end-1);             % Prospective Customer
+
+% Evaluating Feature
+t = 1;
+r = 34;                               % Index of Observed Feature
+
+Feato = Cuo(:, r+t);
+Featp = Cup(:, r+t);
+
+Var = abs(Featp - Feato);
+
+nVar=2;                               % Number of studied features from LIME model
+VarSize=[2, nVar];                    % Size of Decision Variables Matrix
+
+% [row, ~] = size(x);
+a = [0.1, 0.15; 0.2, 0.25];
+
+% VarMin=[Var-a(1,1), Var-a(1,2); Var-a(2,1), Var-a(2,2)];          % Lower Bound of Variables
+% VarMax=[Var+a(1,1), Var+a(1,2); Var+a(2,1), Var+a(2,2)];          % Upper Bound of Variables
+
+VarMin=[0.5, 0.48; 0.4, Var-a(2,2)];          % Lower Bound of Variables
+VarMax=[0.6667, 0.64; Var+a(2,1), Var+a(2,2)];          % Upper Bound of Variables
+
+% Cost Function
+CostFunction=@(x,VarMin,VarMax)    MyCost1(x,VarMin,VarMax);
+
+%% MOPSO Parameters
+
+MaxIt=500;          % Maximum Number of Iterations
+
+nPop=100;           % Population Size
+
+nRep=100;            % Repository Size
+
+w=1;                % Inertia Weight
+wdamp=0.7;          % Intertia Weight Damping Rate
+c1=0.6;            % Personal Learning Coefficient
+c2=0.5;             % Global Learning Coefficient
+
+nGrid=5;            % Number of Grids per Dimension
+alpha=0.2;          % Inflation Rate
+
+beta=200;             % Leader Selection Pressure
+gamma=3;            % Deletion Selection Pressure
+
+mu=0.5;             % Mutation Rate
+
+%% Initialization
+
+empty_particle.Position=[];
+empty_particle.Velocity=[];
+empty_particle.Cost=[];
+empty_particle.Best.Position=[];
+empty_particle.Best.Cost=[];
+empty_particle.IsDominated=[];
+empty_particle.GridIndex=[];
+empty_particle.GridSubIndex=[];
+empty_particle.Teta=[];
+
+pop=repmat(empty_particle,nPop,1);
+
+for i=1:nPop
+    
+    pop(i).Position=RandPosition(VarSize,VarMin,VarMax);
+    
+    pop(i).Velocity=zeros(VarSize);
+    
+    pop(i).Cost=CostFunction(pop(i).Position,VarMin,VarMax);
+       
+    % Update Personal Best
+    pop(i).Best.Position=pop(i).Position;
+    pop(i).Best.Cost=pop(i).Cost;  
+    pop(i).Teta=pop(i).Position(end);
+end
+
+% Determine Domination
+pop=DetermineDomination(pop);
+
+rep=pop(~[pop.IsDominated]);
+
+Grid=CreateGrid(rep,nGrid,alpha);
+
+for i=1:numel(rep)
+    rep(i)=FindGridIndex(rep(i),Grid);
+end
+
+
+%% MOPSO Main Loop
+
+for it=1:MaxIt
+   
+    for i=1:nPop
+        
+        leader=SelectLeader(rep,beta);
+        
+        pop(i).Velocity = w*pop(i).Velocity ...
+            +c1*rand(VarSize).*(pop(i).Best.Position-pop(i).Position) ...
+            +c2*rand(VarSize).*(leader.Position-pop(i).Position);
+        
+        pop(i).Position = pop(i).Position + pop(i).Velocity;
+        
+        pop(i).Cost = CostFunction(pop(i).Position,VarMin,VarMax);
+        
+%         % Apply Mutation
+%         pm=(1-(it-1)/(MaxIt-1))^(1/mu);
+%         
+%         NewSol.Position=Mutate(pop(i).Position,VarMin,VarMax);
+%         
+%         NewSol.Cost=CostFunction(NewSol.Position,VarMin,VarMax);
+%         
+%         if Dominates(NewSol,pop(i))
+%             pop(i).Position=NewSol.Position;
+%             pop(i).Cost=NewSol.Cost;
+%             pop(i).Teta=NewSol.Position(end);
+%             Optimal=pop(i).Position(pop(i).Teta==max([pop(i).Teta]));
+%             
+%         elseif Dominates(pop(i),NewSol)
+%             %Do Nothing
+%             
+%         else
+%             if rand<0.5
+%                 pop(i).Position=NewSol.Position;
+%                 pop(i).Cost=NewSol.Cost;
+%             end
+%         end
+        
+        
+        if Dominates(pop(i),pop(i).Best)
+           pop(i).Best.Position=pop(i).Position;
+           pop(i).Best.Cost=pop(i).Cost;
+            
+        elseif Dominates(pop(i).Best,pop(i))
+%             Do Nothing
+            
+       else
+           if rand<0.5
+               pop(i).Best.Position=pop(i).Position;
+               pop(i).Best.Cost=pop(i).Cost;
+           end
+       end
+        
+    end
+    
+    % Add Non-Dominated Particles to REPOSITORY
+    rep=[rep; pop(~[pop.IsDominated])];
+    
+    % Determine Domination of New Resository Members
+    rep=DetermineDomination(rep);
+    
+    % Keep only Non-Dminated Memebrs in the Repository
+    rep=rep(~[rep.IsDominated]);
+    
+    % Update Grid
+    Grid=CreateGrid(rep,nGrid,alpha);
+
+    % Update Grid Indices
+    for i=1:numel(rep)
+        rep(i)=FindGridIndex(rep(i),Grid);
+    end
+    
+    % Check if Repository is Full
+    if numel(rep)>nRep
+        
+        Extra=numel(rep)-nRep;
+        for e=1:Extra
+            rep=DeleteOneRepMemebr(rep,gamma);
+        end
+        
+    end
+    
+    % Plot Costs
+    figure(1);
+    PlotCosts(pop,rep);
+    
+    % Show Iteration Information
+    disp(['Iteration ' num2str(it) ': Number of Rep Members = ' num2str(numel(rep))]);
+    
+    % Damping Inertia Weight
+    w=w*wdamp;
+        
+end
+
+f=find([rep.Teta]==max([rep.Teta]));
+Optimal=rep(f).Position;
+toc
